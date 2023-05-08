@@ -7,17 +7,17 @@ import * as F from "@effect/data/Function";
 import * as O from "@effect/data/Option";
 import * as AST from "@effect/schema/AST";
 import * as url from "node:url";
-import type * as stages from "./input-spec";
+import type * as inputSpec from "./input-spec";
 
 /**
  * Generates help text from given input specification, and parses arguments using `meow` library.
  * Returns result of the parsing, along with package root used.
  * @param importMeta The {@link ImportMeta} of the package calling this function.
- * @param inputSpec The input specification, containing information about flags and prompting. See {@link stages.StagesBase} for more information.
+ * @param inputSpec The input specification, containing information about flags and prompting. See {@link inputSpec.InputSpecBase} for more information.
  * @returns The {@link CLIArgs} with parsed CLI argument information, along with the deduced package root.
  * @throws If resolving package root fails, or meow parsing throws.
  */
-export default async <TInputSpec extends stages.StagesBase>(
+export default async <TInputSpec extends inputSpec.InputSpecBase>(
   importMeta: ImportMeta,
   inputSpec: TInputSpec,
 ): Promise<CLIArgs<TInputSpec>> => {
@@ -46,7 +46,9 @@ export default async <TInputSpec extends stages.StagesBase>(
   return { parsedArgs, packageRoot };
 };
 
-const getFlags = <TInputSpec extends stages.StagesBase>(stages: TInputSpec) =>
+const getFlags = <TInputSpec extends inputSpec.InputSpecBase>(
+  stages: TInputSpec,
+) =>
   Object.fromEntries(
     Object.entries(stages)
       .filter(
@@ -54,7 +56,7 @@ const getFlags = <TInputSpec extends stages.StagesBase>(stages: TInputSpec) =>
           tuple,
         ): tuple is [
           FlagKeys<TInputSpec>,
-          stages.Stage<unknown> & { flag: AnyFlag },
+          inputSpec.InputSpecProperty<unknown> & { flag: AnyFlag },
         ] => "flag" in tuple[1],
       )
       .map(([key, { flag }]) => [key, flag] as const),
@@ -63,7 +65,7 @@ const getFlags = <TInputSpec extends stages.StagesBase>(stages: TInputSpec) =>
 /**
  * This interface encapsulates result of {@link meow} invocation, along with resolved root path of the package which called this library.
  */
-export interface CLIArgs<TInputSpec extends stages.StagesBase> {
+export interface CLIArgs<TInputSpec extends inputSpec.InputSpecBase> {
   /**
    * The result of {@link meow} invocation.
    */
@@ -77,7 +79,7 @@ export interface CLIArgs<TInputSpec extends stages.StagesBase> {
 /**
  * This is helper type to extract all the flags specified by given input spec.
  */
-export type Flags<TInputSpec extends stages.StagesBase> = {
+export type Flags<TInputSpec extends inputSpec.InputSpecBase> = {
   [P in FlagKeys<TInputSpec>]: TInputSpec[P] extends { flag: AnyFlag }
     ? TInputSpec[P]["flag"]
     : never;
@@ -86,7 +88,7 @@ export type Flags<TInputSpec extends stages.StagesBase> = {
 /**
  * This is helper type to get all the keys of given input spec, which have a CLI flag specification.
  */
-export type FlagKeys<TInputSpec extends stages.StagesBase> = {
+export type FlagKeys<TInputSpec extends inputSpec.InputSpecBase> = {
   [P in keyof TInputSpec]: TInputSpec[P] extends { flag: AnyFlag } ? P : never;
 }[keyof TInputSpec] &
   string;
@@ -106,7 +108,7 @@ const schemaToHelpText = (ast: AST.AST): string => {
   }
 };
 
-const getHelpText = <TInputSpec extends stages.StagesBase>(
+const getHelpText = <TInputSpec extends inputSpec.InputSpecBase>(
   packageName: string,
   stages: TInputSpec,
 ) => `
@@ -121,8 +123,8 @@ const getHelpText = <TInputSpec extends stages.StagesBase>(
           tuple,
         ): tuple is [
           string,
-          stages.CommonStage &
-            stages.StateMutatingStage<unknown> & { flag: AnyFlag },
+          inputSpec.CommonSpec &
+            inputSpec.StateMutatingSpec<unknown> & { flag: AnyFlag },
         ] => "flag" in tuple[1],
       )
       .map(

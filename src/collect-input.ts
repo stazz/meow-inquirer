@@ -1,3 +1,6 @@
+/**
+ * @file This file contains function and type definitions used when collecting the final, fully validated input object, from CLI arguments and/or prompting from user.
+ */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import chalk from "chalk";
 import { type AnyFlag } from "meow";
@@ -14,27 +17,31 @@ import * as S from "@effect/schema/Schema";
 import * as TF from "@effect/schema/TreeFormatter";
 import * as Match from "@effect/match";
 import print from "./print";
-import * as cliArgs from "./cli-args";
-import type * as stages from "./input-spec";
+import type * as cliArgs from "./cli-args";
+import type * as inputSpec from "./input-spec";
 
-export default <TStages extends stages.StagesBase>(
-    stages: TStages,
-  ): (<TValidatedInput>(
-    cliArgs: CLIArgsInfo<TStages>,
-    dynamicValueInputKey: keyof InputFromCLIOrUser<TStages>,
-    inputValidator: InputValidator<TStages, TValidatedInput>,
-  ) => Promise<TValidatedInput>) =>
-  async (cliArgs, dynamicValueInputKey, inputValidator) => {
+/**
+ * Binds to a given input specification, returning callback which will perform the actual input building - either from CLI arguments, prompting from user, or a combination of both.
+ * @param stages The input specification.
+ * @returns The callback performing actual input object building, bound to given input spec.
+ * @see {@link BuildValidatedInput}
+ * @see {@link inputSpec.InputSpecBase}
+ */
+export default <TInputSpec extends inputSpec.InputSpecBase>(
+    stages: TInputSpec,
+  ): BuildValidatedInput<TInputSpec> =>
+  async ({ cliArgs: cliArgsParam, inputValidator, getDynamicValueInput }) => {
     // Then, collect the inputs - use CLI args or prompt from user
     // Keep collecting until all inputs pass validation
-    let input: InputFromCLIOrUser<TStages> = {};
+    let cliArgs: CLIArgsInfo<TInputSpec> = cliArgsParam;
+    let input: InputFromCLIOrUser<TInputSpec> = {};
     let validatedInput: GetValidatedInput<typeof inputValidator> | undefined;
     do {
       // Get the inputs from CLI args or user prompt
       // On first loop, the 'input' will be empty and all the things will be checked/asked.
       // On subsequent loops (if any), only the errored properties will be missing, and thus checked/asked again.
-      const cliArgsSet: Set.HashSet<CLIArgsInfoSetElement<TStages>> =
-        await collectInput(stages, cliArgs, input, dynamicValueInputKey);
+      const cliArgsSet: Set.HashSet<CLIArgsInfoSetElement<TInputSpec>> =
+        await collectInput(stages, cliArgs, input, getDynamicValueInput);
       // Validate the inputs in a way that template creation part knows
       const validationResult = await inputValidator(input);
       if (Array.isArray(validationResult)) {
@@ -70,45 +77,130 @@ export default <TStages extends stages.StagesBase>(
     return validatedInput;
   };
 
+/**
+ * This callback will asynchronously create the validated input.
+ * For that, it will take the necessary data from {@link cliArgs.CLIArgs}, the name of the dynamic value callback parameter, and the callback to perform final validation.
+ *
+ * If CLI args contain, or the user gives input, which is deemed to be invalid by the given `inputValidator`, the user will be re-prompted to give the values until the validator accepts them.
+ * @see {@link CLIArgsResult}
+ * @see {@link InputValidator}
+ * @see {@link inputSpec.InputSpecBase}
+ */
+export type BuildValidatedInput<TInputSpec extends inputSpec.InputSpecBase> = <
+  TValidatedInput,
+>(
+  args: BuildValidatedInputParameters<TInputSpec, TValidatedInput>,
+) => Promise<TValidatedInput>;
+
+/**
+ * This type represents arguments of callbak type {@link BuildValidatedInput}.
+ */
+export type BuildValidatedInputParameters<
+  TInputSpec extends inputSpec.InputSpecBase,
+  TValidatedInput,
+> = {
+  /**
+   * The information about parsed CLI arguments, typically obtained via calling {@link cliArgs}.
+   */
+  cliArgs: CLIArgsResult<TInputSpec>;
+  /**
+   * The callback to perform final validation when all the properties have been parsed from CLI args and/or prompted from user.
+   */
+  inputValidator: InputValidator<TInputSpec, TValidatedInput>;
+
+  /**
+   * The callback to get dynamic value input.
+   */
+  getDynamicValueInput: GetDynamicValueArg<TInputSpec>;
+};
+
+/**
+ * This type represents callback to get parameter for {@link cliArgs.DynamicValue}
+ */
+export type GetDynamicValueArg<TInputSpec extends inputSpec.InputSpecBase> = (
+  values: InputFromCLIOrUser<TInputSpec>,
+) => inputSpec.GetDynamicValueInput<TInputSpec> | undefined;
+
+/**
+ * This callback is used to perform the final validation of the input, after iterating the CLI arguments and prompting the value from user, if needed.
+ * It takes the unvalidated input as argument, and either:
+ *
+ * - Asynchronously returns validated input,
+ * - Synchronously returns error message, which is interpreted as internal error, and causes wiping of CLI arguments and starting prompting from user from clean slate, or
+ * - Asynchronously returns errors related to certain parts of the input, causing the error message to be displayed, and re-prompting for valid values from user.
+ * @see {@link InputFromCLIOrUser}
+ */
 export type InputValidator<
-  TStages extends stages.StagesBase,
+  TInputSpec extends inputSpec.InputSpecBase,
   TValidatedInput,
 > = (
-  input: InputFromCLIOrUser<TStages>,
+  input: InputFromCLIOrUser<TInputSpec>,
 ) =>
   | string
   | Promise<
       | TValidatedInput
-      | Array<readonly [keyof InputFromCLIOrUser<TStages>, string]>
+      | Array<readonly [keyof InputFromCLIOrUser<TInputSpec>, string]>
     >;
 
-const collectInput = async <TStages extends stages.StagesBase>(
-  stages: TStages,
-  cliArgs: CLIArgsInfo<TStages>,
-  values: InputFromCLIOrUser<TStages>,
-  dynamicValueInputKey: keyof InputFromCLIOrUser<TStages>,
-): Promise<Set.HashSet<CLIArgsInfoSetElement<TStages>>> => {
-  let components: O.Option<stages.GetDynamicValueInput<TStages>> =
-    O.fromNullable(values[dynamicValueInputKey]);
-  let cliArgsSet = Set.make<ReadonlyArray<CLIArgsInfoSetElement<TStages>>>();
-  for (const [stageName, stageInfo] of getStagesOrdered(stages)) {
+/**
+ * This type represents data which has been collected from CLI or prompted from user, and should be validated.
+ * @see {@link InputValidator}
+ */
+export type InputFromCLIOrUser<TInputSpec extends inputSpec.InputSpecBase> =
+  Partial<{
+    -readonly [P in SchemaKeys<TInputSpec>]: TInputSpec[P] extends inputSpec.StateMutatingSpec<
+      infer _
+    >
+      ? S.To<TInputSpec[P]["schema"]>
+      : never;
+  }>;
+
+/**
+ * This type represents the necessary data required from {@link cliArgs.CLIArgs} in order to construct final validated input object.
+ */
+export type CLIArgsResult<TInputSpec extends inputSpec.InputSpecBase> =
+  Readonly<Pick<cliArgs.CLIArgs<TInputSpec>["parsedArgs"], "flags" | "input">>;
+
+/**
+ * This type represents all the names of the given input spec which have validation schema associated with them.
+ * @see {@link inputSpec.InputSpecBase}
+ * @see {@link inputSpec.StateMutatingSpec}
+ */
+export type SchemaKeys<TInputSpec extends inputSpec.InputSpecBase> = {
+  [P in keyof TInputSpec]: TInputSpec[P] extends inputSpec.StateMutatingSpec<
+    infer _
+  >
+    ? P
+    : never;
+}[keyof TInputSpec];
+
+const collectInput = async <TInputSpec extends inputSpec.InputSpecBase>(
+  stages: TInputSpec,
+  cliArgs: CLIArgsInfo<TInputSpec>,
+  values: InputFromCLIOrUser<TInputSpec>,
+  getDynamicValueInput: GetDynamicValueArg<TInputSpec>,
+): Promise<Set.HashSet<CLIArgsInfoSetElement<TInputSpec>>> => {
+  let dynamicValueInput: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>> =
+    O.fromNullable(getDynamicValueInput(values));
+  let cliArgsSet = Set.make<ReadonlyArray<CLIArgsInfoSetElement<TInputSpec>>>();
+  for (const [stageName, stageInfo] of getInputSpecOrdered(stages)) {
     if (!(stageName in values)) {
       F.pipe(
         Match.value(
           O.fromNullable(
-            await handleStage(stageName, stageInfo, cliArgs, components),
+            await handleStage(stageName, stageInfo, cliArgs, dynamicValueInput),
           ),
         ),
         Match.when(O.isSome, ({ value: { value, fromCLI } }) => {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           values[stageName as keyof typeof values] = value;
-          if (stageName === dynamicValueInputKey) {
-            components = O.some(value as stages.GetDynamicValueInput<TStages>);
+          if (O.isNone(dynamicValueInput)) {
+            dynamicValueInput = O.fromNullable(getDynamicValueInput(values));
           }
           if (fromCLI) {
             cliArgsSet = Set.add(
               cliArgsSet,
-              stageName as CLIArgsInfoSetElement<TStages>,
+              stageName as CLIArgsInfoSetElement<TInputSpec>,
             );
           }
         }),
@@ -120,7 +212,9 @@ const collectInput = async <TStages extends stages.StagesBase>(
   return cliArgsSet;
 };
 
-const getStagesOrdered = <TStages extends stages.StagesBase>(stages: TStages) =>
+const getInputSpecOrdered = <TInputSpec extends inputSpec.InputSpecBase>(
+  stages: TInputSpec,
+) =>
   F.pipe(
     stages,
     R.toEntries,
@@ -129,40 +223,51 @@ const getStagesOrdered = <TStages extends stages.StagesBase>(stages: TStages) =>
         N.Order,
         Ord.contramap(
           (
-            stage: [string, stages.Stage<stages.GetDynamicValueInput<TStages>>],
+            stage: [
+              string,
+              inputSpec.InputSpecProperty<
+                inputSpec.GetDynamicValueInput<TInputSpec>
+              >,
+            ],
           ) => stage[1].orderNumber,
         ),
       ),
     ),
   );
 
-const handleStage = <TStages extends stages.StagesBase>(
-  valueName: keyof TStages,
-  stage: stages.Stage<stages.GetDynamicValueInput<TStages>>,
-  cliArgs: CLIArgsInfo<TStages>,
-  components: O.Option<stages.GetDynamicValueInput<TStages>>,
+const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
+  valueName: keyof TInputSpec,
+  stage: inputSpec.InputSpecProperty<
+    inputSpec.GetDynamicValueInput<TInputSpec>
+  >,
+  cliArgs: CLIArgsInfo<TInputSpec>,
+  components: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>>,
 ) =>
   F.pipe(
     Match.value(stage),
     Match.when(
       (
         stage,
-      ): stage is stages.MessageStage<stages.GetDynamicValueInput<TStages>> &
-        stages.CommonStage => "message" in stage,
-      (stage): O.Option<Promise<StageHandlingResult<TStages>>> =>
+      ): stage is inputSpec.MessageSpec<
+        inputSpec.GetDynamicValueInput<TInputSpec>
+      > &
+        inputSpec.CommonSpec => "message" in stage,
+      (stage): O.Option<Promise<StageHandlingResult<TInputSpec>>> =>
         handleStageMessage(stage, components),
     ),
     Match.orElse(
-      (stage): O.Option<Promise<StageHandlingResult<TStages>>> =>
+      (stage): O.Option<Promise<StageHandlingResult<TInputSpec>>> =>
         handleStageStateMutation(valueName, stage, cliArgs, components),
     ),
     O.getOrNull,
   );
 
-const handleStageMessage = <TStages extends stages.StagesBase>(
-  { message }: stages.MessageStage<stages.GetDynamicValueInput<TStages>>,
-  components: O.Option<stages.GetDynamicValueInput<TStages>>,
-): O.Option<Promise<StageHandlingResult<TStages>>> =>
+const handleStageMessage = <TInputSpec extends inputSpec.InputSpecBase>(
+  {
+    message,
+  }: inputSpec.MessageSpec<inputSpec.GetDynamicValueInput<TInputSpec>>,
+  components: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>>,
+): O.Option<Promise<StageHandlingResult<TInputSpec>>> =>
   F.pipe(
     // Start pattern matching on message
     Match.value(message),
@@ -183,17 +288,17 @@ const handleStageMessage = <TStages extends stages.StagesBase>(
 // I'm not quite sure how @effect -umbrella libs will handle that eventually.
 // FP-TS had Tasks, but @effect seems to lack those, and use the fiber-based Effect thingy.
 // I guess that works too, but pairing that with newer stuff like pattern matching etc doesn't seem to be quite intuitive at least.
-const handleStageStateMutation = <TStages extends stages.StagesBase>(
-  valueName: keyof TStages,
+const handleStageStateMutation = <TInputSpec extends inputSpec.InputSpecBase>(
+  valueName: keyof TInputSpec,
   {
     condition,
     schema,
     flag,
     prompt,
-  }: stages.StateMutatingStage<stages.GetDynamicValueInput<TStages>>,
-  cliArgs: CLIArgsInfo<TStages>,
-  components: O.Option<stages.GetDynamicValueInput<TStages>>,
-): O.Option<Promise<StageHandlingResult<TStages>>> => {
+  }: inputSpec.StateMutatingSpec<inputSpec.GetDynamicValueInput<TInputSpec>>,
+  cliArgs: CLIArgsInfo<TInputSpec>,
+  components: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>>,
+): O.Option<Promise<StageHandlingResult<TInputSpec>>> => {
   return F.pipe(
     // Match the condition
     Match.value(condition),
@@ -224,13 +329,13 @@ const handleStageStateMutation = <TStages extends stages.StagesBase>(
   );
 };
 
-const getValueFromCLIFlagsOrArgs = <TStages extends stages.StagesBase>(
+const getValueFromCLIFlagsOrArgs = <TInputSpec extends inputSpec.InputSpecBase>(
   valueName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: S.Schema<any>,
   flag: AnyFlag | undefined,
-  cliArgs: CLIArgsInfo<TStages>,
-): O.Option<StageValues<TStages>> =>
+  cliArgs: CLIArgsInfo<TInputSpec>,
+): O.Option<StageValues<TInputSpec>> =>
   F.pipe(
     Match.value(cliArgs),
     // Current version of @effect/schema has a bug with this
@@ -238,8 +343,8 @@ const getValueFromCLIFlagsOrArgs = <TStages extends stages.StagesBase>(
     Match.when(Set.isHashSet, (cliArgsNames: unknown) => {
       if (
         Set.has(
-          cliArgsNames as Set.HashSet<CLIArgsInfoSetElement<TStages>>,
-          valueName as CLIArgsInfoSetElement<TStages>,
+          cliArgsNames as Set.HashSet<CLIArgsInfoSetElement<TInputSpec>>,
+          valueName as CLIArgsInfoSetElement<TInputSpec>,
         )
       ) {
         // The value was specified via CLI, but failed more advanced validation
@@ -249,15 +354,15 @@ const getValueFromCLIFlagsOrArgs = <TStages extends stages.StagesBase>(
           ),
         );
       }
-      return O.none<StageValues<TStages> | undefined>();
+      return O.none<StageValues<TInputSpec> | undefined>();
     }),
     Match.orElse<
-      cliArgs.CLIArgs<TStages>,
-      O.Option<StageValues<TStages> | undefined>
+      InternalCLIArgsResult<TInputSpec>,
+      O.Option<StageValues<TInputSpec> | undefined>
     >(({ flags, input }) =>
       F.pipe(
         // Match the value either from flags, or from unnamed CLI args
-        Match.value<StageValues<TStages> | undefined>(
+        Match.value<StageValues<TInputSpec> | undefined>(
           flag ? flags[valueName as keyof typeof flags] : input[0],
         ),
         // If value was specified (is not undefined)
@@ -276,7 +381,7 @@ const getValueFromCLIFlagsOrArgs = <TStages extends stages.StagesBase>(
                 ),
               );
               // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-              return value as StageValues<TStages>;
+              return value as StageValues<TInputSpec>;
             }),
             // If value does not adher to schema, we should not use it.
             // Notify user about this.
@@ -295,7 +400,7 @@ const getValueFromCLIFlagsOrArgs = <TStages extends stages.StagesBase>(
             }),
           ),
         ),
-        (matcher): O.Option<StageValues<TStages> | undefined> =>
+        (matcher): O.Option<StageValues<TInputSpec> | undefined> =>
           // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-explicit-any
           Match.option(matcher) as any,
       ),
@@ -307,7 +412,7 @@ const getValueFromCLIFlagsOrArgs = <TStages extends stages.StagesBase>(
     O.flatten,
   );
 
-const promptValueFromUser = <TStages extends stages.StagesBase>(
+const promptValueFromUser = <TInputSpec extends inputSpec.InputSpecBase>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: S.Schema<any>,
   prompt: DistinctQuestion,
@@ -320,7 +425,7 @@ const promptValueFromUser = <TStages extends stages.StagesBase>(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       (
         await inquirer.prompt<{
-          question: StageValues<TStages>;
+          question: StageValues<TInputSpec>;
         }>({
           ...prompt,
           name: "question",
@@ -342,51 +447,46 @@ const promptValueFromUser = <TStages extends stages.StagesBase>(
 // The constTrue in @effect/data/Function is of type F.LazyArg<boolean> while here we need F.LazyArg<true>
 const constTrue: F.LazyArg<true> = () => true;
 
-export type InputFromCLIOrUser<TStages extends stages.StagesBase> = Partial<{
-  -readonly [P in SchemaKeys<TStages>]: TStages[P] extends stages.StateMutatingStage<
-    infer _
-  >
-    ? S.To<TStages[P]["schema"]>
-    : never;
-}>;
+type CLIArgsInfo<TInputSpec extends inputSpec.InputSpecBase> =
+  | InternalCLIArgsResult<TInputSpec>
+  | Set.HashSet<CLIArgsInfoSetElement<TInputSpec>>;
 
-export type CLIArgsInfo<TStages extends stages.StagesBase> =
-  | cliArgs.CLIArgs<TStages>
-  | Set.HashSet<CLIArgsInfoSetElement<TStages>>;
+type InternalCLIArgsResult<TInputSpec extends inputSpec.InputSpecBase> = Omit<
+  CLIArgsResult<TInputSpec>,
+  "flags"
+> & {
+  flags: Partial<CLIArgsResult<TInputSpec>["flags"]>;
+};
 
-export type CLIArgsInfoSetElement<TStages extends stages.StagesBase> =
-  | cliArgs.FlagKeys<TStages>
-  | CLIInputsKey<TStages>;
+type CLIArgsInfoSetElement<TInputSpec extends inputSpec.InputSpecBase> =
+  | cliArgs.FlagKeys<TInputSpec>
+  | CLIInputsKey<TInputSpec>;
 
-export type CLIInputsKey<TStages extends stages.StagesBase> = {
-  [P in keyof TStages]: TStages[P] extends {
+type CLIInputsKey<TInputSpec extends inputSpec.InputSpecBase> = {
+  [P in keyof TInputSpec]: TInputSpec[P] extends {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     schema: S.Schema<infer _>;
     flag?: never;
   }
     ? P
     : never;
-}[keyof TStages];
+}[keyof TInputSpec];
 
-export type SchemaKeys<TStages extends stages.StagesBase> = {
-  [P in keyof TStages]: TStages[P] extends stages.StateMutatingStage<infer _>
-    ? P
-    : never;
-}[keyof TStages];
-
-type StageHandlingResult<TStages extends stages.StagesBase> = {
-  value: StageValues<TStages>;
+type StageHandlingResult<TInputSpec extends inputSpec.InputSpecBase> = {
+  value: StageValues<TInputSpec>;
   fromCLI: boolean;
 };
 
-type SchemasOfStages<TStages extends stages.StagesBase> = {
-  [P in keyof TStages]: TStages[P] extends stages.StateMutatingStage<infer _>
-    ? TStages[P]["schema"]
+type SchemasOfStages<TInputSpec extends inputSpec.InputSpecBase> = {
+  [P in keyof TInputSpec]: TInputSpec[P] extends inputSpec.StateMutatingSpec<
+    infer _
+  >
+    ? TInputSpec[P]["schema"]
     : never;
-}[keyof TStages];
+}[keyof TInputSpec];
 
-type StageValues<TStages extends stages.StagesBase> = S.To<
-  SchemasOfStages<TStages>
+type StageValues<TInputSpec extends inputSpec.InputSpecBase> = S.To<
+  SchemasOfStages<TInputSpec>
 >;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
