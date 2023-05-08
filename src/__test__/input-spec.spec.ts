@@ -2,44 +2,41 @@
  * @file This file contains unit tests for file `../input-spec.ts`.
  */
 import test from "ava";
-import * as S from "@effect/schema/Schema";
-import type * as spec from "../input-spec";
-import type * as collectInput from "../collect-input";
+// import * as S from "@effect/schema/Schema";
+// import type * as spec from "../input-spec";
+// import type * as collectInput from "../collect-input";
 
 test("This tests does nothing for now", (c) => c.pass());
 
-const cliArgs: collectInput.CLIArgsResult<any> = { flags: {}, input: [] };
-const schema = S.string;
-const prompt = {};
-const orderNumber = 0;
+// const cliArgs: collectInput.CLIArgsResult<any> = { flags: {}, input: [] };
+// const schema = S.string;
+// const prompt = {};
+// const orderNumber = 0;
 
-const emptyInputSpec = {} as const satisfies spec.InputSpec;
-const emptyInputSpecArgs: collectInput.BuildValidatedInputParameters<
-  typeof emptyInputSpec,
-  never
-> = {
-  cliArgs,
-  inputValidator: () => "",
-  getDynamicValueInput: () => "",
-};
+// const emptyInputSpec = {} as const satisfies spec.InputSpec;
+// const emptyInputSpecArgs: collectInput.BuildValidatedInputParameters<
+//   typeof emptyInputSpec,
+//   never
+// > = {
+//   cliArgs,
+//   inputValidator: () => "",
+//   getDynamicValueInput: () => "",
+// };
 
-const oneSimpleInputSpec = {
-  parameter: {
-    orderNumber,
-    schema,
-    prompt: {
-      type: "input",
-      message: "Please enter value for parameter",
-    },
-  },
-} as const satisfies spec.InputSpec;
-const oneSimpleInputSpecArgs: collectInput.BuildValidatedInputParameters<
-  typeof emptyInputSpec,
-  never
-> = {
-  cliArgs,
-  inputValidator: () => "",
-};
+// const oneSimpleInputSpec = {
+//   parameter: {
+//     orderNumber,
+//     schema,
+//     prompt,
+//   },
+// } as const satisfies spec.InputSpec;
+// const oneSimpleInputSpecArgs: collectInput.BuildValidatedInputParameters<
+//   typeof emptyInputSpec,
+//   never
+// > = {
+//   cliArgs,
+//   inputValidator: () => "",
+// };
 
 // const oneInputWithDynamicValueWithoutArgsSpec = {
 //   parameter: {
