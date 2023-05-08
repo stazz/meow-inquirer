@@ -1,50 +1,94 @@
+/**
+ * @file This file contains code related to invoking `meow` to parse arguments, with help text generated from input specification.
+ */
 import meow, { type AnyFlag, type Result } from "meow";
 import * as readPkgUp from "read-pkg-up";
+import * as F from "@effect/data/Function";
+import * as O from "@effect/data/Option";
 import * as AST from "@effect/schema/AST";
+import * as url from "node:url";
 import type * as stages from "./input-spec";
 
-export default async <TStages extends stages.StagesBase>(
-  packageRoot: string,
-  stages: TStages,
-): Promise<CLIArgs<TStages>> => {
-  const { flags, input } = meow(await getHelpText(packageRoot, stages), {
-    importMeta: import.meta,
-    flags: getFlags(stages),
+/**
+ * Generates help text from given input specification, and parses arguments using `meow` library.
+ * Returns result of the parsing, along with package root used.
+ * @param importMeta The {@link ImportMeta} of the package calling this function.
+ * @param inputSpec The input specification, containing information about flags and prompting. See {@link stages.StagesBase} for more information.
+ * @returns The {@link CLIArgs} with parsed CLI argument information, along with the deduced package root.
+ * @throws If resolving package root fails, or meow parsing throws.
+ */
+export default async <TInputSpec extends stages.StagesBase>(
+  importMeta: ImportMeta,
+  inputSpec: TInputSpec,
+): Promise<CLIArgs<TInputSpec>> => {
+  // From: https://blog.logrocket.com/alternatives-dirname-node-js-es-modules/
+  const pkgUpCwd = url.fileURLToPath(new URL(".", importMeta.url));
+  // Resolve package root
+  const { packageJson, path: packageRoot } = F.pipe(
+    await readPkgUp.readPackageUp({
+      cwd: pkgUpCwd,
+    }),
+    O.fromNullable,
+    O.getOrThrowWith(
+      () => new Error(`Failed to read package.json from "${pkgUpCwd}".`),
+    ),
+  );
+
+  // Parse CLI arguments and pass generated help text.
+  const parsedArgs = meow(getHelpText(packageJson.name, inputSpec), {
+    importMeta,
+    flags: getFlags(inputSpec),
     booleanDefault: undefined,
     autoVersion: true,
     autoHelp: true,
   });
-  return { flags, input };
+  // Return parse result along with package root
+  return { parsedArgs, packageRoot };
 };
 
-const getFlags = <TStages extends stages.StagesBase>(stages: TStages) =>
+const getFlags = <TInputSpec extends stages.StagesBase>(stages: TInputSpec) =>
   Object.fromEntries(
     Object.entries(stages)
       .filter(
         (
           tuple,
         ): tuple is [
-          FlagKeys<TStages>,
+          FlagKeys<TInputSpec>,
           stages.Stage<unknown> & { flag: AnyFlag },
         ] => "flag" in tuple[1],
       )
       .map(([key, { flag }]) => [key, flag] as const),
-  ) as Flags<TStages>;
+  ) as Flags<TInputSpec>;
 
-export interface CLIArgs<TStages extends stages.StagesBase> {
-  input: ReadonlyArray<string>;
-  flags: Partial<Result<Flags<TStages>>["flags"]>;
+/**
+ * This interface encapsulates result of {@link meow} invocation, along with resolved root path of the package which called this library.
+ */
+export interface CLIArgs<TInputSpec extends stages.StagesBase> {
+  /**
+   * The result of {@link meow} invocation.
+   */
+  parsedArgs: Result<Flags<TInputSpec>>;
+  /**
+   * The root path of the package which invoked this library.
+   */
+  packageRoot: string;
 }
 
-export type Flags<TStages extends stages.StagesBase> = {
-  [P in FlagKeys<TStages>]: TStages[P] extends { flag: AnyFlag }
-    ? TStages[P]["flag"]
+/**
+ * This is helper type to extract all the flags specified by given input spec.
+ */
+export type Flags<TInputSpec extends stages.StagesBase> = {
+  [P in FlagKeys<TInputSpec>]: TInputSpec[P] extends { flag: AnyFlag }
+    ? TInputSpec[P]["flag"]
     : never;
 };
 
-export type FlagKeys<TStages extends stages.StagesBase> = {
-  [P in keyof TStages]: TStages[P] extends { flag: AnyFlag } ? P : never;
-}[keyof TStages] &
+/**
+ * This is helper type to get all the keys of given input spec, which have a CLI flag specification.
+ */
+export type FlagKeys<TInputSpec extends stages.StagesBase> = {
+  [P in keyof TInputSpec]: TInputSpec[P] extends { flag: AnyFlag } ? P : never;
+}[keyof TInputSpec] &
   string;
 
 const schemaToHelpText = (ast: AST.AST): string => {
@@ -62,13 +106,11 @@ const schemaToHelpText = (ast: AST.AST): string => {
   }
 };
 
-const getHelpText = async <TStages extends stages.StagesBase>(
-  packageRoot: string,
-  stages: TStages,
+const getHelpText = <TInputSpec extends stages.StagesBase>(
+  packageName: string,
+  stages: TInputSpec,
 ) => `
-  Usage: npx ${
-    (await readPkgUp.readPackageUp({ cwd: packageRoot }))?.packageJson.name
-  }@latest [options...] [folder]
+  Usage: npx ${packageName}@latest [options...] [folder]
 
   All options and folder are optional as command-line arguments.
   If any of them is omitted, the program will prompt for their values.
