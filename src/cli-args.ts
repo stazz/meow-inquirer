@@ -47,8 +47,6 @@ export default async <TInputSpec extends inputSpec.InputSpecBase>({
   return { cliArgs: parsedArgs, packageRoot };
 };
 
-export const lel = "LEL";
-
 /**
  * This interface represents necessary data needed to collect CLI arguments.
  */
@@ -142,8 +140,7 @@ const getHelpText = <TInputSpec extends inputSpec.InputSpecBase>(
           tuple,
         ): tuple is [
           string,
-          inputSpec.CommonSpec &
-            inputSpec.StateMutatingSpec<unknown> & { flag: AnyFlag },
+          inputSpec.StateMutatingSpec<unknown> & { flag: AnyFlag },
         ] => "flag" in tuple[1],
       )
       .map(

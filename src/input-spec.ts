@@ -17,6 +17,7 @@ import { type DistinctQuestion } from "inquirer";
  *
  * export const inputSpec = {
  *   parameter: {
+ *     type: mi.TYPE_VALIDATE,
  *     orderNumber: 0,
  *     schema: S.string,
  *     prompt: {
@@ -46,11 +47,13 @@ import { type DistinctQuestion } from "inquirer";
  * const inputSpec = {
  *   // A general message about starting to query for project configuration
  *   generalMessage: {
- *   orderNumber: 0,
- *   message: chalk.bold.bgBlueBright("# General project configuration"),
+ *     type: mi.TYPE_MESSAGE,
+ *     orderNumber: 0,
+ *     message: chalk.bold.bgBlueBright("# General project configuration"),
  *   },
  *   // Target folder where to write the project
  *   folderName: {
+ *     type: mi.TYPE_VALIDATE,
  *     orderNumber: 1,
  *     // String, but with additional transformation to absolute path
  *     schema: F.pipe(
@@ -73,6 +76,7 @@ import { type DistinctQuestion } from "inquirer";
  *   },
  *   // Which package manager the project will be using
  *   packageManager: {
+ *     type: mi.TYPE_VALIDATE,
  *     orderNumber: 2,
  *     // We allow only one of the three, or let the user decide later
  *     schema: S.keyof(
@@ -120,9 +124,9 @@ export type InputSpecBase = InputSpec<any>;
  * This type represents specification of single property within input specification.
  * @see {@link InputSpec}
  */
-// TODO this maybe needs to be discriminated type union? Current definition allows spec to be both message and state mutating.
-export type InputSpecProperty<TDynamicValueInput> = CommonSpec &
-  (StateMutatingSpec<TDynamicValueInput> | MessageSpec<TDynamicValueInput>);
+export type InputSpecProperty<TDynamicValueInput> =
+  | StateMutatingSpec<TDynamicValueInput>
+  | MessageSpec<TDynamicValueInput>;
 
 /**
  * This interface contains properties which are common for all instances of {@link InputSpecProperty}.
@@ -138,7 +142,11 @@ export interface CommonSpec {
 /**
  * This interface contains properties which constitute input property spec, which mutates the intermediate input spec object, by taking value either from CLI argument, or by prompting from user.
  */
-export interface StateMutatingSpec<TDynamicValueInput> {
+export interface StateMutatingSpec<TDynamicValueInput> extends CommonSpec {
+  /**
+   * The discriminating type union -property which identifies this as instruction to parse property from CLI arg or prompt from user, and then validate it.
+   */
+  type: typeof TYPE_VALIDATE;
   /**
    * The prompt specification, if value for this property spec will need to be prompted from user.
    * @see DistinctQuestion
@@ -184,7 +192,11 @@ export interface ConditionWithDescription<TDynamicValueInput> {
 /**
  * This interface contains properties which constitute printing message, without actually mutating input spec object.
  */
-export interface MessageSpec<TDynamicValueInput> {
+export interface MessageSpec<TDynamicValueInput> extends CommonSpec {
+  /**
+   * The discriminating type union -property which identifies this as instruction to print message.
+   */
+  type: typeof TYPE_MESSAGE;
   /**
    * The message to print.
    * Can be either string value, or a callback to get the string value.
@@ -205,3 +217,6 @@ export type GetDynamicValueInput<TInputSpec extends InputSpecBase> =
   TInputSpec extends InputSpec<infer TDynamicValueInput>
     ? TDynamicValueInput
     : never;
+
+export const TYPE_VALIDATE = "validate";
+export const TYPE_MESSAGE = "message";

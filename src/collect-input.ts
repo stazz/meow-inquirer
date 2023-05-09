@@ -18,17 +18,17 @@ import * as TF from "@effect/schema/TreeFormatter";
 import * as Match from "@effect/match";
 import print from "./print";
 import type * as cliArgs from "./cli-args";
-import type * as inputSpec from "./input-spec";
+import * as inputSpec from "./input-spec";
 
 /**
  * Binds to a given input specification, returning callback which will perform the actual input building - either from CLI arguments, prompting from user, or a combination of both.
- * @param inputSpec The input specification.
+ * @param spec The input specification.
  * @returns The callback performing actual input object building, bound to given input spec.
  * @see {@link BuildValidatedInput}
  * @see {@link inputSpec.InputSpecBase}
  */
 export default <TInputSpec extends inputSpec.InputSpecBase>(
-    inputSpec: TInputSpec,
+    spec: TInputSpec,
   ): BuildValidatedInput<TInputSpec> =>
   async ({ cliArgs: cliArgsParam, inputValidator, getDynamicValueInput }) => {
     // Then, collect the inputs - use CLI args or prompt from user
@@ -41,7 +41,7 @@ export default <TInputSpec extends inputSpec.InputSpecBase>(
       // On first loop, the 'input' will be empty and all the things will be checked/asked.
       // On subsequent loops (if any), only the errored properties will be missing, and thus checked/asked again.
       const cliArgsSet: Set.HashSet<CLIArgsInfoSetElement<TInputSpec>> =
-        await collectInput(inputSpec, cliArgs, input, getDynamicValueInput);
+        await collectInput(spec, cliArgs, input, getDynamicValueInput);
       // Validate the inputs in a way that template creation part knows
       const validationResult = await inputValidator(input);
       if (Array.isArray(validationResult)) {
@@ -175,7 +175,7 @@ export type SchemaKeys<TInputSpec extends inputSpec.InputSpecBase> = {
 }[keyof TInputSpec];
 
 const collectInput = async <TInputSpec extends inputSpec.InputSpecBase>(
-  inputSpec: TInputSpec,
+  spec: TInputSpec,
   cliArgs: CLIArgsInfo<TInputSpec>,
   values: InputFromCLIOrUser<TInputSpec>,
   getDynamicValueInput: GetDynamicValueArg<TInputSpec>,
@@ -183,7 +183,7 @@ const collectInput = async <TInputSpec extends inputSpec.InputSpecBase>(
   let dynamicValueInput: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>> =
     O.fromNullable(getDynamicValueInput(values));
   let cliArgsSet = Set.make<ReadonlyArray<CLIArgsInfoSetElement<TInputSpec>>>();
-  for (const [stageName, stageInfo] of getInputSpecOrdered(inputSpec)) {
+  for (const [stageName, stageInfo] of getInputSpecOrdered(spec)) {
     if (!(stageName in values)) {
       F.pipe(
         Match.value(
@@ -250,8 +250,7 @@ const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
         stage,
       ): stage is inputSpec.MessageSpec<
         inputSpec.GetDynamicValueInput<TInputSpec>
-      > &
-        inputSpec.CommonSpec => "message" in stage,
+      > => stage.type === "message",
       (stage): O.Option<Promise<StageHandlingResult<TInputSpec>>> =>
         handleStageMessage(stage, components),
     ),

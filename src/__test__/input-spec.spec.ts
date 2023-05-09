@@ -6,7 +6,7 @@ import test from "ava";
 // import type * as spec from "../input-spec";
 // import type * as collectInput from "../collect-input";
 
-test("This tests does nothing for now", (c) => c.pass());
+test("This test does nothing for now", (c) => c.pass());
 
 // const cliArgs: collectInput.CLIArgsResult<any> = { flags: {}, input: [] };
 // const schema = S.string;

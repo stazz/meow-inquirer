@@ -4,13 +4,13 @@
 import * as createCLIArgsImport from "./cli-args";
 import * as collectInputImport from "./collect-input";
 import printImport from "./print";
-import type * as inputSpec from "./input-spec";
+import * as inputSpec from "./input-spec";
 
 export const createCLIArgs = createCLIArgsImport.default;
 export const collectInput = collectInputImport.default;
 export const print = printImport;
 
-export type * from "./input-spec";
+export * from "./input-spec";
 export type * from "./cli-args";
 export type * from "./collect-input";
 
