@@ -12,15 +12,16 @@ import type * as inputSpec from "./input-spec";
 /**
  * Generates help text from given input specification, and parses arguments using `meow` library.
  * Returns result of the parsing, along with package root used.
- * @param importMeta The {@link ImportMeta} of the package calling this function.
- * @param inputSpec The input specification, containing information about flags and prompting. See {@link inputSpec.InputSpecBase} for more information.
+ * @param root0 The {@link GetCLIArgsParameters} acting as input for this function.
+ * @param root0.importMeta Deconstructed property.
+ * @param root0.inputSpec Deconstructed property.
  * @returns The {@link CLIArgs} with parsed CLI argument information, along with the deduced package root.
  * @throws If resolving package root fails, or meow parsing throws.
  */
-export default async <TInputSpec extends inputSpec.InputSpecBase>(
-  importMeta: ImportMeta,
-  inputSpec: TInputSpec,
-): Promise<CLIArgs<TInputSpec>> => {
+export default async <TInputSpec extends inputSpec.InputSpecBase>({
+  importMeta,
+  inputSpec,
+}: GetCLIArgsParameters<TInputSpec>): Promise<CLIArgs<TInputSpec>> => {
   // From: https://blog.logrocket.com/alternatives-dirname-node-js-es-modules/
   const pkgUpCwd = url.fileURLToPath(new URL(".", importMeta.url));
   // Resolve package root
@@ -43,24 +44,24 @@ export default async <TInputSpec extends inputSpec.InputSpecBase>(
     autoHelp: true,
   });
   // Return parse result along with package root
-  return { parsedArgs, packageRoot };
+  return { cliArgs: parsedArgs, packageRoot };
 };
 
-const getFlags = <TInputSpec extends inputSpec.InputSpecBase>(
-  stages: TInputSpec,
-) =>
-  Object.fromEntries(
-    Object.entries(stages)
-      .filter(
-        (
-          tuple,
-        ): tuple is [
-          FlagKeys<TInputSpec>,
-          inputSpec.InputSpecProperty<unknown> & { flag: AnyFlag },
-        ] => "flag" in tuple[1],
-      )
-      .map(([key, { flag }]) => [key, flag] as const),
-  ) as Flags<TInputSpec>;
+/**
+ * This interface represents necessary data needed to collect CLI arguments.
+ */
+export interface GetCLIArgsParameters<
+  TInputSpec extends inputSpec.InputSpecBase,
+> {
+  /**
+   * The {@link ImportMeta} of the package calling this function.
+   */
+  importMeta: ImportMeta;
+  /**
+   * The input specification, containing information about flags and prompting. See {@link inputSpec.InputSpecBase} for more information.
+   */
+  inputSpec: TInputSpec;
+}
 
 /**
  * This interface encapsulates result of {@link meow} invocation, along with resolved root path of the package which called this library.
@@ -69,7 +70,7 @@ export interface CLIArgs<TInputSpec extends inputSpec.InputSpecBase> {
   /**
    * The result of {@link meow} invocation.
    */
-  parsedArgs: Result<Flags<TInputSpec>>;
+  cliArgs: Result<Flags<TInputSpec>>;
   /**
    * The root path of the package which invoked this library.
    */
@@ -92,6 +93,22 @@ export type FlagKeys<TInputSpec extends inputSpec.InputSpecBase> = {
   [P in keyof TInputSpec]: TInputSpec[P] extends { flag: AnyFlag } ? P : never;
 }[keyof TInputSpec] &
   string;
+
+const getFlags = <TInputSpec extends inputSpec.InputSpecBase>(
+  stages: TInputSpec,
+) =>
+  Object.fromEntries(
+    Object.entries(stages)
+      .filter(
+        (
+          tuple,
+        ): tuple is [
+          FlagKeys<TInputSpec>,
+          inputSpec.InputSpecProperty<unknown> & { flag: AnyFlag },
+        ] => "flag" in tuple[1],
+      )
+      .map(([key, { flag }]) => [key, flag] as const),
+  ) as Flags<TInputSpec>;
 
 const schemaToHelpText = (ast: AST.AST): string => {
   switch (ast._tag) {

@@ -22,13 +22,13 @@ import type * as inputSpec from "./input-spec";
 
 /**
  * Binds to a given input specification, returning callback which will perform the actual input building - either from CLI arguments, prompting from user, or a combination of both.
- * @param stages The input specification.
+ * @param inputSpec The input specification.
  * @returns The callback performing actual input object building, bound to given input spec.
  * @see {@link BuildValidatedInput}
  * @see {@link inputSpec.InputSpecBase}
  */
 export default <TInputSpec extends inputSpec.InputSpecBase>(
-    stages: TInputSpec,
+    inputSpec: TInputSpec,
   ): BuildValidatedInput<TInputSpec> =>
   async ({ cliArgs: cliArgsParam, inputValidator, getDynamicValueInput }) => {
     // Then, collect the inputs - use CLI args or prompt from user
@@ -41,7 +41,7 @@ export default <TInputSpec extends inputSpec.InputSpecBase>(
       // On first loop, the 'input' will be empty and all the things will be checked/asked.
       // On subsequent loops (if any), only the errored properties will be missing, and thus checked/asked again.
       const cliArgsSet: Set.HashSet<CLIArgsInfoSetElement<TInputSpec>> =
-        await collectInput(stages, cliArgs, input, getDynamicValueInput);
+        await collectInput(inputSpec, cliArgs, input, getDynamicValueInput);
       // Validate the inputs in a way that template creation part knows
       const validationResult = await inputValidator(input);
       if (Array.isArray(validationResult)) {
@@ -159,7 +159,7 @@ export type InputFromCLIOrUser<TInputSpec extends inputSpec.InputSpecBase> =
  * This type represents the necessary data required from {@link cliArgs.CLIArgs} in order to construct final validated input object.
  */
 export type CLIArgsResult<TInputSpec extends inputSpec.InputSpecBase> =
-  Readonly<Pick<cliArgs.CLIArgs<TInputSpec>["parsedArgs"], "flags" | "input">>;
+  Readonly<Pick<cliArgs.CLIArgs<TInputSpec>["cliArgs"], "flags" | "input">>;
 
 /**
  * This type represents all the names of the given input spec which have validation schema associated with them.
@@ -175,7 +175,7 @@ export type SchemaKeys<TInputSpec extends inputSpec.InputSpecBase> = {
 }[keyof TInputSpec];
 
 const collectInput = async <TInputSpec extends inputSpec.InputSpecBase>(
-  stages: TInputSpec,
+  inputSpec: TInputSpec,
   cliArgs: CLIArgsInfo<TInputSpec>,
   values: InputFromCLIOrUser<TInputSpec>,
   getDynamicValueInput: GetDynamicValueArg<TInputSpec>,
@@ -183,7 +183,7 @@ const collectInput = async <TInputSpec extends inputSpec.InputSpecBase>(
   let dynamicValueInput: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>> =
     O.fromNullable(getDynamicValueInput(values));
   let cliArgsSet = Set.make<ReadonlyArray<CLIArgsInfoSetElement<TInputSpec>>>();
-  for (const [stageName, stageInfo] of getInputSpecOrdered(stages)) {
+  for (const [stageName, stageInfo] of getInputSpecOrdered(inputSpec)) {
     if (!(stageName in values)) {
       F.pipe(
         Match.value(
