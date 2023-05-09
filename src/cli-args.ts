@@ -120,6 +120,8 @@ const schemaToHelpText = (ast: AST.AST): string => {
         : `${ast.literal}`;
     case "BooleanKeyword":
       return "boolean";
+    case "NumberKeyword":
+      return "number";
     default:
       throw new Error(`Unrecognized AST: ${ast._tag}`);
   }
