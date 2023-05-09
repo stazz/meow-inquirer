@@ -40,7 +40,7 @@ module.exports = {
           "ClassExpression": true,
           "FunctionDeclaration": true,
           "FunctionExpression": true,
-          "MethodDefinition": true
+          "MethodDefinition": true,
         },
         "exemptEmptyConstructors": true,
         "exemptEmptyFunctions": false,
@@ -49,7 +49,7 @@ module.exports = {
           "TSInterfaceDeclaration",
           "TSTypeAliasDeclaration",
           "TSMethodSignature",
-          "TSPropertySignature"
+          "TSPropertySignature",
         ]
       }
     ]
