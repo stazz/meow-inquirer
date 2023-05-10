@@ -148,7 +148,7 @@ export type InputValidator<
  */
 export type InputFromCLIOrUser<TInputSpec extends inputSpec.InputSpecBase> =
   Partial<{
-    -readonly [P in SchemaKeys<TInputSpec>]: TInputSpec[P] extends inputSpec.StateMutatingSpec<
+    -readonly [P in SchemaKeys<TInputSpec>]: TInputSpec[P] extends inputSpec.ValidationSpec<
       infer _
     >
       ? S.To<TInputSpec[P]["schema"]>
@@ -164,10 +164,10 @@ export type CLIArgsResult<TInputSpec extends inputSpec.InputSpecBase> =
 /**
  * This type represents all the names of the given input spec which have validation schema associated with them.
  * @see {@link inputSpec.InputSpecBase}
- * @see {@link inputSpec.StateMutatingSpec}
+ * @see {@link inputSpec.ValidationSpec}
  */
 export type SchemaKeys<TInputSpec extends inputSpec.InputSpecBase> = {
-  [P in keyof TInputSpec]: TInputSpec[P] extends inputSpec.StateMutatingSpec<
+  [P in keyof TInputSpec]: TInputSpec[P] extends inputSpec.ValidationSpec<
     infer _
   >
     ? P
@@ -294,7 +294,7 @@ const handleStageStateMutation = <TInputSpec extends inputSpec.InputSpecBase>(
     schema,
     flag,
     prompt,
-  }: inputSpec.StateMutatingSpec<inputSpec.GetDynamicValueInput<TInputSpec>>,
+  }: inputSpec.ValidationSpec<inputSpec.GetDynamicValueInput<TInputSpec>>,
   cliArgs: CLIArgsInfo<TInputSpec>,
   components: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>>,
 ): O.Option<Promise<StageHandlingResult<TInputSpec>>> => {
@@ -477,7 +477,7 @@ type StageHandlingResult<TInputSpec extends inputSpec.InputSpecBase> = {
 };
 
 type SchemasOfStages<TInputSpec extends inputSpec.InputSpecBase> = {
-  [P in keyof TInputSpec]: TInputSpec[P] extends inputSpec.StateMutatingSpec<
+  [P in keyof TInputSpec]: TInputSpec[P] extends inputSpec.ValidationSpec<
     infer _
   >
     ? TInputSpec[P]["schema"]

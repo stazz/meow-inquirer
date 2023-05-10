@@ -142,7 +142,7 @@ const getHelpText = <TInputSpec extends inputSpec.InputSpecBase>(
           tuple,
         ): tuple is [
           string,
-          inputSpec.StateMutatingSpec<unknown> & { flag: AnyFlag },
+          inputSpec.ValidationSpec<unknown> & { flag: AnyFlag },
         ] => "flag" in tuple[1],
       )
       .map(

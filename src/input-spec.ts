@@ -125,7 +125,7 @@ export type InputSpecBase = InputSpec<any>;
  * @see {@link InputSpec}
  */
 export type InputSpecProperty<TDynamicValueInput> =
-  | StateMutatingSpec<TDynamicValueInput>
+  | ValidationSpec<TDynamicValueInput>
   | MessageSpec<TDynamicValueInput>;
 
 /**
@@ -142,7 +142,7 @@ export interface CommonSpec {
 /**
  * This interface contains properties which constitute input property spec, which mutates the intermediate input spec object, by taking value either from CLI argument, or by prompting from user.
  */
-export interface StateMutatingSpec<TDynamicValueInput> extends CommonSpec {
+export interface ValidationSpec<TDynamicValueInput> extends CommonSpec {
   /**
    * The discriminating type union -property which identifies this as instruction to parse property from CLI arg or prompt from user, and then validate it.
    */
@@ -173,7 +173,7 @@ export interface StateMutatingSpec<TDynamicValueInput> extends CommonSpec {
 
 /**
  * This interface defines the shape of the condition which will be evaluated during input validation process.
- * If condition is present in {@link StateMutatingSpec}, it will be evaluated, and processing the specification will be skipped if `isApplicable` callback returns `false`.
+ * If condition is present in {@link ValidationSpec}, it will be evaluated, and processing the specification will be skipped if `isApplicable` callback returns `false`.
  */
 export interface ConditionWithDescription<TDynamicValueInput> {
   /**
@@ -182,7 +182,7 @@ export interface ConditionWithDescription<TDynamicValueInput> {
    */
   description: string;
   /**
-   * Callback to determine whether the {@link StateMutatingSpec} containing this condition should be skipped.
+   * Callback to determine whether the {@link ValidationSpec} containing this condition should be skipped.
    * If returns `true`, then the spec will be used.
    * Otherwise, the spec will be skipped.
    */
@@ -218,5 +218,11 @@ export type GetDynamicValueInput<TInputSpec extends InputSpecBase> =
     ? TDynamicValueInput
     : never;
 
+/**
+ * This constant should be used to identify {@link InputSpecProperty} to be {@link ValidationSpec}.
+ */
 export const TYPE_VALIDATE = "validate";
+/**
+ * This constant should be used to identify {@link InputSpecProperty} to be {@link MessageSpec}.
+ */
 export const TYPE_MESSAGE = "message";
