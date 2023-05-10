@@ -10,7 +10,7 @@ on:
         required: false
         type: string
         default: |
-          tyras_pre_run ()
+          mi_pre_run ()
           {
             echo 'No pre-run.'
           }
@@ -46,7 +46,7 @@ jobs:
           set -e
 
           ${{ inputs.pre-run-function }}
-          tyras_pre_run
+          mi_pre_run
 
       - id: install
         name: Install dependencies of

@@ -18,7 +18,7 @@ jobs:
       fetch-depth: 0 # We must fetch whole history to be able to search for tags
       # Don't use normal NPM publish actions in order to avoid token writing to .npmrc file.
       post-run-function: |
-        tyras_post_run ()
+        mi_post_run ()
         {
           PACKAGE_VERSION="$(cat "package.json" | jq -rM .version)"
           GIT_TAG_NAME="v${PACKAGE_VERSION}"
