@@ -1195,6 +1195,11 @@ eslint-plugin-jsdoc@43.1.1:
     semver "^7.5.0"
     spdx-expression-parse "^3.0.1"
 
+eslint-plugin-path-import-extension@0.9.0:
+  version "0.9.0"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-path-import-extension/-/eslint-plugin-path-import-extension-0.9.0.tgz#0cc6f20f5f88f041abeb408aaee4b1ae16fc9ea2"
+  integrity sha512-IWYfAe394sWA6m39bJAxqYMc4fEoFsI4zXJbfdehBfL0pJNNdOhXq5Ju22Fa6QZyN/2/eV7nbuNwVGmS6p9LwQ==
+
 eslint-plugin-prettier@4.2.1:
   version "4.2.1"
   resolved "https://registry.yarnpkg.com/eslint-plugin-prettier/-/eslint-plugin-prettier-4.2.1.tgz#651cbb88b1dab98bfd42f017a12fa6b2d993f94b"
