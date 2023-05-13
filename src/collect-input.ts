@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import chalk from "chalk";
 import { type AnyFlag } from "meow";
-import inquirer, { type DistinctQuestion } from "inquirer";
+import inquirer, { type DistinctQuestion, type PromptModule } from "inquirer";
 import * as F from "@effect/data/Function";
 import * as E from "@effect/data/Either";
 import * as R from "@effect/data/ReadonlyRecord";
@@ -30,18 +30,32 @@ import * as inputSpec from "./input-spec";
 export default <TInputSpec extends inputSpec.InputSpecBase>(
     spec: TInputSpec,
   ): BuildValidatedInput<TInputSpec> =>
-  async ({ cliArgs: cliArgsParam, inputValidator, getDynamicValueInput }) => {
+  async ({
+    cliArgs: cliArgsParam,
+    inputValidator,
+    getDynamicValueInput,
+    promptModule,
+  }) => {
     // Then, collect the inputs - use CLI args or prompt from user
     // Keep collecting until all inputs pass validation
     let cliArgs: CLIArgsInfo<TInputSpec> = cliArgsParam;
     let input: InputFromCLIOrUser<TInputSpec> = {};
     let validatedInput: GetValidatedInput<typeof inputValidator> | undefined;
+    if (!promptModule) {
+      promptModule = defaultPrompt;
+    }
     do {
       // Get the inputs from CLI args or user prompt
       // On first loop, the 'input' will be empty and all the things will be checked/asked.
       // On subsequent loops (if any), only the errored properties will be missing, and thus checked/asked again.
       const cliArgsSet: Set.HashSet<CLIArgsInfoSetElement<TInputSpec>> =
-        await collectInput(spec, cliArgs, input, getDynamicValueInput);
+        await collectInput(
+          promptModule,
+          spec,
+          cliArgs,
+          input,
+          getDynamicValueInput,
+        );
       // Validate the inputs in a way that template creation part knows
       const validationResult = await inputValidator(input);
       if (Array.isArray(validationResult)) {
@@ -112,6 +126,14 @@ export type BuildValidatedInputParameters<
    * The callback to get dynamic value input.
    */
   getDynamicValueInput: GetDynamicValueArg<TInputSpec>;
+
+  /**
+   * Override the {@link PromptModule} used to prompt the value from user..
+   * Notice that default value is NOT {@link inquirer.prompt}, but instead a prompt module which has its `skipTTYChecks` set to `false`.
+   * If that is not done, passing non-tty input to process will cause inquirer to silently exit the process with exit code `0`.
+   * For more information, see https://github.com/SBoudrias/Inquirer.js/issues/495 .
+   */
+  promptModule?: PromptModule;
 };
 
 /**
@@ -175,6 +197,7 @@ export type SchemaKeys<TInputSpec extends inputSpec.InputSpecBase> = {
 }[keyof TInputSpec];
 
 const collectInput = async <TInputSpec extends inputSpec.InputSpecBase>(
+  promptModule: PromptModule,
   spec: TInputSpec,
   cliArgs: CLIArgsInfo<TInputSpec>,
   values: InputFromCLIOrUser<TInputSpec>,
@@ -188,7 +211,13 @@ const collectInput = async <TInputSpec extends inputSpec.InputSpecBase>(
       F.pipe(
         Match.value(
           O.fromNullable(
-            await handleStage(stageName, stageInfo, cliArgs, dynamicValueInput),
+            await handleStage(
+              promptModule,
+              stageName,
+              stageInfo,
+              cliArgs,
+              dynamicValueInput,
+            ),
           ),
         ),
         Match.when(O.isSome, ({ value: { value, fromCLI } }) => {
@@ -236,6 +265,7 @@ const getInputSpecOrdered = <TInputSpec extends inputSpec.InputSpecBase>(
   );
 
 const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
+  promptModule: PromptModule,
   valueName: keyof TInputSpec,
   stage: inputSpec.InputSpecProperty<
     inputSpec.GetDynamicValueInput<TInputSpec>
@@ -256,7 +286,13 @@ const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
     ),
     Match.orElse(
       (stage): O.Option<Promise<StageHandlingResult<TInputSpec>>> =>
-        handleStageStateMutation(valueName, stage, cliArgs, components),
+        handleStageStateMutation(
+          promptModule,
+          valueName,
+          stage,
+          cliArgs,
+          components,
+        ),
     ),
     O.getOrNull,
   );
@@ -288,6 +324,7 @@ const handleStageMessage = <TInputSpec extends inputSpec.InputSpecBase>(
 // FP-TS had Tasks, but @effect seems to lack those, and use the fiber-based Effect thingy.
 // I guess that works too, but pairing that with newer stuff like pattern matching etc doesn't seem to be quite intuitive at least.
 const handleStageStateMutation = <TInputSpec extends inputSpec.InputSpecBase>(
+  promptModule: PromptModule,
   valueName: keyof TInputSpec,
   {
     condition,
@@ -316,7 +353,7 @@ const handleStageStateMutation = <TInputSpec extends inputSpec.InputSpecBase>(
         Match.value,
         // When value is not set, or is invalid (= undefined), then prompt value from user
         Match.when(O.isNone, async () => ({
-          value: await promptValueFromUser(schema, prompt),
+          value: await promptValueFromUser(promptModule, schema, prompt),
           fromCLI: false,
         })),
         // If valid value was in CLI flags or args, use it as-is
@@ -412,6 +449,7 @@ const getValueFromCLIFlagsOrArgs = <TInputSpec extends inputSpec.InputSpecBase>(
   );
 
 const promptValueFromUser = <TInputSpec extends inputSpec.InputSpecBase>(
+  promptModule: PromptModule,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: S.Schema<any>,
   prompt: DistinctQuestion,
@@ -423,7 +461,7 @@ const promptValueFromUser = <TInputSpec extends inputSpec.InputSpecBase>(
     async (decode) =>
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       (
-        await inquirer.prompt<{
+        await promptModule<{
           question: StageValues<TInputSpec>;
         }>({
           ...prompt,
@@ -493,3 +531,10 @@ type GetValidatedInput<TValidator extends InputValidator<any, any>> =
   TValidator extends InputValidator<infer _, infer TValidatedInput>
     ? TValidatedInput
     : never;
+
+const defaultPrompt = inquirer.createPromptModule({
+  // If we don't do this, when the process is invoked with `< /dev/null`, the inquirer will simply silently exit with code 0
+  // We don't want that - instead we want an error to be thrown
+  // See for more info: https://github.com/SBoudrias/Inquirer.js/issues/495
+  skipTTYChecks: false,
+});
