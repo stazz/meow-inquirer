@@ -7,11 +7,12 @@ import * as F from "@effect/data/Function";
 import * as O from "@effect/data/Option";
 import * as AST from "@effect/schema/AST";
 import * as url from "node:url";
+import * as path from "node:path";
 import type * as inputSpec from "./input-spec";
 
 /**
  * Generates help text from given input specification, and parses arguments using `meow` library.
- * Returns result of the parsing, along with package root used.
+ * Returns result of the parsing, along with package root (directory of resolved package.json file) used.
  * @param root0 The {@link GetCLIArgsParameters} acting as input for this function.
  * @param root0.importMeta Deconstructed property.
  * @param root0.inputSpec Deconstructed property.
@@ -44,7 +45,7 @@ export default async <TInputSpec extends inputSpec.InputSpecBase>({
     autoHelp: true,
   });
   // Return parse result along with package root
-  return { cliArgs: parsedArgs, packageRoot };
+  return { cliArgs: parsedArgs, packageRoot: path.dirname(packageRoot) };
 };
 
 /**
