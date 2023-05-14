@@ -183,11 +183,21 @@ export interface ConditionWithDescription<TDynamicValueInput> {
   description: string;
   /**
    * Callback to determine whether the {@link ValidationSpec} containing this condition should be skipped.
-   * If returns `true`, then the spec will be used.
+   * If returns `true` (synchronously or asynchronously), then the spec will be used.
    * Otherwise, the spec will be skipped.
+   * If string will be returned, it will be printed before skipping.
+   * @see IsApplicableReturnValue
    */
-  isApplicable: DynamicValue<TDynamicValueInput, boolean>;
+  isApplicable: DynamicValue<
+    TDynamicValueInput,
+    IsApplicableReturnValue | Promise<IsApplicableReturnValue>
+  >;
 }
+
+/**
+ * This type represents the possible return type of applicability check in {@link ConditionWithDescription}, either synchronously or asynchronously
+ */
+export type IsApplicableReturnValue = string | boolean;
 
 /**
  * This interface contains properties which constitute printing message, without actually mutating input spec object.

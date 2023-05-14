@@ -264,7 +264,7 @@ const getInputSpecOrdered = <TInputSpec extends inputSpec.InputSpecBase>(
     ),
   );
 
-const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
+const handleStage = async <TInputSpec extends inputSpec.InputSpecBase>(
   promptModule: PromptModule,
   valueName: keyof TInputSpec,
   stage: inputSpec.InputSpecProperty<
@@ -272,8 +272,8 @@ const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
   >,
   cliArgs: CLIArgsInfo<TInputSpec>,
   components: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>>,
-) =>
-  F.pipe(
+) => {
+  const maybeResult = await F.pipe(
     Match.value(stage),
     Match.when(
       (
@@ -281,11 +281,11 @@ const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
       ): stage is inputSpec.MessageSpec<
         inputSpec.GetDynamicValueInput<TInputSpec>
       > => stage.type === "message",
-      (stage): O.Option<Promise<StageHandlingResult<TInputSpec>>> =>
-        handleStageMessage(stage, components),
+      (stage): Promise<O.Option<Promise<StageHandlingResult<TInputSpec>>>> =>
+        Promise.resolve(handleStageMessage(stage, components)),
     ),
     Match.orElse(
-      (stage): O.Option<Promise<StageHandlingResult<TInputSpec>>> =>
+      (stage): Promise<O.Option<Promise<StageHandlingResult<TInputSpec>>>> =>
         handleStageStateMutation(
           promptModule,
           valueName,
@@ -294,8 +294,9 @@ const handleStage = <TInputSpec extends inputSpec.InputSpecBase>(
           components,
         ),
     ),
-    O.getOrNull,
   );
+  return O.getOrNull(maybeResult);
+};
 
 const handleStageMessage = <TInputSpec extends inputSpec.InputSpecBase>(
   {
@@ -323,7 +324,9 @@ const handleStageMessage = <TInputSpec extends inputSpec.InputSpecBase>(
 // I'm not quite sure how @effect -umbrella libs will handle that eventually.
 // FP-TS had Tasks, but @effect seems to lack those, and use the fiber-based Effect thingy.
 // I guess that works too, but pairing that with newer stuff like pattern matching etc doesn't seem to be quite intuitive at least.
-const handleStageStateMutation = <TInputSpec extends inputSpec.InputSpecBase>(
+const handleStageStateMutation = async <
+  TInputSpec extends inputSpec.InputSpecBase,
+>(
   promptModule: PromptModule,
   valueName: keyof TInputSpec,
   {
@@ -334,14 +337,17 @@ const handleStageStateMutation = <TInputSpec extends inputSpec.InputSpecBase>(
   }: inputSpec.ValidationSpec<inputSpec.GetDynamicValueInput<TInputSpec>>,
   cliArgs: CLIArgsInfo<TInputSpec>,
   components: O.Option<inputSpec.GetDynamicValueInput<TInputSpec>>,
-): O.Option<Promise<StageHandlingResult<TInputSpec>>> => {
-  return F.pipe(
+): Promise<O.Option<Promise<StageHandlingResult<TInputSpec>>>> => {
+  const isApplicable = await F.pipe(
     // Match the condition
     Match.value(condition),
     // If condition is not specified, then it is interpreted as true
     Match.when(Match.undefined, F.constTrue),
     // Otherwise, condition is a function -> invoke it to get the actual boolean value
     Match.orElse(({ isApplicable }) => isApplicable(O.getOrThrow(components))),
+  );
+  return F.pipe(
+    isApplicable,
     // Start new pattern matching, which will perform the actual state mutation
     Match.value,
     // If the condition pattern match evaluated to true, proceed
@@ -360,8 +366,15 @@ const handleStageStateMutation = <TInputSpec extends inputSpec.InputSpecBase>(
         Match.orElse(({ value }) => Promise.resolve({ value, fromCLI: true })),
       ),
     ),
-    // End matching
-    Match.option,
+    // Else if the condition pattern match evaluated to string, print the string
+    Match.orElse(
+      F.flow(
+        Match.value,
+        Match.when(Match.string, (message) => (print(message), undefined)),
+        Match.orElse(() => undefined),
+      ),
+    ),
+    O.fromNullable,
   );
 };
 
