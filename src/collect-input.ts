@@ -12,7 +12,7 @@ import * as A from "@effect/data/ReadonlyArray";
 import * as N from "@effect/data/Number";
 import * as O from "@effect/data/Option";
 import * as Set from "@effect/data/HashSet";
-import * as Ord from "@effect/data/typeclass/Order";
+import * as Ord from "@effect/data/Order";
 import * as S from "@effect/schema/Schema";
 import * as TF from "@effect/schema/TreeFormatter";
 import * as Match from "@effect/match";
@@ -250,7 +250,7 @@ const getInputSpecOrdered = <TInputSpec extends inputSpec.InputSpecBase>(
     A.sort(
       F.pipe(
         N.Order,
-        Ord.contramap(
+        Ord.mapInput(
           (
             stage: [
               string,
@@ -411,7 +411,9 @@ const getValueFromCLIFlagsOrArgs = <TInputSpec extends inputSpec.InputSpecBase>(
     >(({ flags, input }) =>
       F.pipe(
         // Match the value either from flags, or from unnamed CLI args
-        Match.value<StageValues<TInputSpec> | undefined>(
+        // If we don't use 'any' here, we get error about excessive depth of type instantiation :(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Match.value<any>(
           flag ? flags[valueName as keyof typeof flags] : input[0],
         ),
         // If value was specified (is not undefined)
@@ -486,7 +488,7 @@ const promptValueFromUser = <TInputSpec extends inputSpec.InputSpecBase>(
               // Use decoder to validate input
               decode,
               // On success, just return true
-              E.map(constTrue),
+              E.mapRight(constTrue),
               // On error, return string with nicely formatted error message
               E.getOrElse(({ errors }) => TF.formatErrors(errors)),
             ),

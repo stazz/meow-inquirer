@@ -5,8 +5,12 @@ import test from "ava";
 // import * as S from "@effect/schema/Schema";
 // import type * as spec from "../input-spec";
 // import type * as collectInput from "../collect-input";
+import * as spec from "..";
 
-test("This test does nothing for now", (c) => c.pass());
+test("This test does nothing for now", (c) => {
+  c.plan(1);
+  c.deepEqual(spec.TYPE_MESSAGE, "message");
+});
 
 // const cliArgs: collectInput.CLIArgsResult<any> = { flags: {}, input: [] };
 // const schema = S.string;
